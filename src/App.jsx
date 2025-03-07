@@ -1,33 +1,23 @@
-import { toast } from "sonner";
-import { Toaster } from "./components/ui/sonner";
+// src/App.jsx
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { Routes, Route, Link } from "react-router-dom";
+import { Routes, Route } from "react-router-dom";
 import {
   createInbox,
   fetchInboxes,
   deleteInbox,
   fetchInboxEmails,
   sendEmail,
+  deleteEmail,
 } from "./store/inboxSlice";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
+import { Toaster } from "./components/ui/sonner";
 
+import InboxList from "./components/home/InboxList";
+import SendEmailDrawer from "./components/home/SendEmailDrawer";
 import About from "./About";
+import Header from "./components/home/Header";
+import { Button } from "./components/ui/button";
 
 function App() {
   const dispatch = useDispatch();
@@ -45,8 +35,9 @@ function App() {
   const [sendTo, setSendTo] = useState("");
   const [sendSubject, setSendSubject] = useState("");
   const [sendBody, setSendBody] = useState("");
-  const [isSendOpen, setIsSendOpen] = useState(false); // Control Send modal
-  const [isDeleteOpen, setIsDeleteOpen] = useState(false); // Control Delete modal
+  const [isSendOpen, setIsSendOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [sendError, setSendError] = useState("");
 
   useEffect(() => {
     dispatch(fetchInboxes());
@@ -100,7 +91,7 @@ function App() {
       });
       setDeletingId(null);
       setDeleteId(null);
-      setIsDeleteOpen(false); // Close modal after delete
+      setIsDeleteOpen(false);
     }, 300);
   };
 
@@ -118,6 +109,19 @@ function App() {
   };
 
   const handleSendEmail = () => {
+    console.log("Sending:", {
+      from: sendFrom,
+      to: sendTo,
+      subject: sendSubject,
+      body: sendBody,
+    });
+    if (!sendTo.includes("@caesarmail.com")) {
+      setSendError("Recipient must be a @caesarmail.com inbox");
+      toast.error("Invalid recipient", {
+        description: "Use a @caesarmail.com address",
+      });
+      return;
+    }
     dispatch(
       sendEmail({
         from: sendFrom,
@@ -125,228 +129,87 @@ function App() {
         subject: sendSubject,
         body: sendBody,
       })
-    ).then((result) => {
-      if (result.meta.requestStatus === "fulfilled") {
-        toast.success("Email sent", { description: `To: ${sendTo}` });
-        setSendFrom("");
-        setSendTo("");
-        setSendSubject("");
-        setSendBody("");
-        setIsSendOpen(false); // Close modal after send
-      } else {
-        toast.error("Failed to send email", {
-          description: result.error?.message,
-        });
-      }
-    });
+    )
+      .then((result) => {
+        if (result.meta.requestStatus === "fulfilled") {
+          toast.success("Email sent", { description: `To: ${sendTo}` });
+          setSendFrom("");
+          setSendTo("");
+          setSendSubject("");
+          setSendBody("");
+          setIsSendOpen(false);
+          setSendError("");
+        } else {
+          console.error("Send failed:", result);
+          setSendError(result.error?.message || "Unknown error");
+          toast.error("Failed to send email", {
+            description: result.error?.message || "Unknown error",
+          });
+        }
+      })
+      .catch((err) => console.error("Unexpected error:", err));
   };
 
   const Home = () => (
-    <div className="min-h-screen bg-background text-foreground flex flex-col items-center p-4">
-      <div className="flex justify-between w-full max-w-md mb-6">
-        <h1 className="text-3xl font-bold">CaesarMail</h1>
-        <div className="flex items-center space-x-4">
-          <Link
-            to="/about"
-            className="text-primary underline dark:text-primary-foreground"
-          >
-            About
-          </Link>
-          <Switch
-            checked={isDarkMode}
-            onCheckedChange={setIsDarkMode}
-            aria-label="Toggle dark mode"
-          />
-        </div>
-      </div>
-      <div className="flex space-x-4 mb-4">
-        <Button onClick={handleCreateInbox} disabled={status === "loading"}>
+    <div className="min-h-screen bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900 text-foreground flex flex-col items-center p-3 sm:p-6 lg:p-8 relative">
+      <Header isDarkMode={isDarkMode} setIsDarkMode={setIsDarkMode} />
+      <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4 mb-4 sm:mb-6 w-full max-w-md">
+        <Button
+          onClick={handleCreateInbox}
+          disabled={status === "loading"}
+          className="text-xs sm:text-sm bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white"
+        >
           {status === "loading" ? "Creating..." : "Create Inbox (Ctrl+N)"}
         </Button>
         <Button
           onClick={handleRefresh}
           variant="outline"
           disabled={status === "loading"}
+          className="text-xs sm:text-sm border-blue-600 text-blue-600 hover:bg-blue-100 dark:border-blue-400 dark:text-blue-400 dark:hover:bg-blue-900"
         >
           Refresh
         </Button>
       </div>
       {error && (
-        <div className="mb-4 p-3 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200 rounded-md">
+        <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200 rounded-lg shadow-md w-full max-w-md text-sm sm:text-base">
           Error: {error}
         </div>
       )}
-      <div className="w-full max-w-md">
-        <h2 className="text-xl font-semibold mb-2">Inboxes</h2>
-        {status === "loading" ? (
-          <div className="flex justify-center">
-            <div className="w-6 h-6 border-4 border-t-4 border-muted border-t-primary dark:border-t-primary-foreground rounded-full animate-spin"></div>
-          </div>
-        ) : inboxes.length === 0 ? (
-          <p className="text-muted-foreground dark:text-muted">
-            No inboxes yet.
-          </p>
-        ) : (
-          <ul className="space-y-2">
-            {inboxes.map((inbox) => (
-              <li
-                key={inbox.id}
-                className={`${
-                  deletingId === inbox.id
-                    ? "animate-out fade-out duration-300"
-                    : "animate-in fade-in slide-in-from-bottom-2 duration-300"
-                }`}
-              >
-                <Card className="bg-card text-card-foreground dark:bg-card-dark dark:text-card-foreground-dark">
-                  <CardContent className="p-4 flex flex-col space-y-2">
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <span>{inbox.id}</span>
-                        <span className="text-muted-foreground dark:text-muted text-sm ml-2">
-                          (Created:{" "}
-                          {new Date(inbox.created_at).toLocaleString()})
-                        </span>
-                      </div>
-                      <div className="flex space-x-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleCopyInbox(inbox.id)}
-                          disabled={status === "loading"}
-                        >
-                          {copiedId === inbox.id ? "Copied!" : "Copy"}
-                        </Button>
-                        <AlertDialog
-                          open={isDeleteOpen && deleteId === inbox.id}
-                          onOpenChange={setIsDeleteOpen}
-                        >
-                          <AlertDialogTrigger asChild>
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              disabled={
-                                status === "loading" || deletingId === inbox.id
-                              }
-                              onClick={() => setDeleteId(inbox.id)}
-                            >
-                              {deletingId === inbox.id
-                                ? "Deleting..."
-                                : "Delete"}
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent className="dark:bg-gray-800 dark:text-white">
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                              <AlertDialogDescription className="dark:text-gray-300">
-                                This will permanently delete {inbox.id}.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel
-                                onClick={() => setDeleteId(null)}
-                                className="dark:bg-gray-700 dark:text-white"
-                              >
-                                Cancel
-                              </AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => handleDeleteInbox(inbox.id)}
-                                className="dark:bg-red-600 dark:text-white"
-                              >
-                                Delete
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => handleViewEmails(inbox.id)}
-                          disabled={status === "loading"}
-                        >
-                          View Emails
-                        </Button>
-                        <AlertDialog
-                          open={isSendOpen && sendFrom === inbox.id}
-                          onOpenChange={setIsSendOpen}
-                        >
-                          <AlertDialogTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled={status === "loading"}
-                              onClick={() => setSendFrom(inbox.id)}
-                            >
-                              Send Email
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent className="dark:bg-gray-800 dark:text-white">
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>
-                                Send Email from {inbox.id}
-                              </AlertDialogTitle>
-                            </AlertDialogHeader>
-                            <div className="space-y-4">
-                              <Input
-                                placeholder="To"
-                                value={sendTo}
-                                onChange={(e) => setSendTo(e.target.value)}
-                                className="dark:bg-gray-700 dark:text-white dark:border-gray-600"
-                              />
-                              <Input
-                                placeholder="Subject"
-                                value={sendSubject}
-                                onChange={(e) => setSendSubject(e.target.value)}
-                                className="dark:bg-gray-700 dark:text-white dark:border-gray-600"
-                              />
-                              <Textarea
-                                placeholder="Body"
-                                value={sendBody}
-                                onChange={(e) => setSendBody(e.target.value)}
-                                className="dark:bg-gray-700 dark:text-white dark:border-gray-600"
-                              />
-                            </div>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel className="dark:bg-gray-700 dark:text-white">
-                                Cancel
-                              </AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={handleSendEmail}
-                                className="dark:bg-blue-600 dark:text-white"
-                              >
-                                Send
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
-                    </div>
-                    {emails[inbox.id] && (
-                      <div className="mt-2">
-                        <h3 className="text-sm font-semibold">Emails:</h3>
-                        {emails[inbox.id].length === 0 ? (
-                          <p className="text-muted-foreground dark:text-muted text-sm">
-                            No emails yet.
-                          </p>
-                        ) : (
-                          <ul className="space-y-1">
-                            {emails[inbox.id].map((email) => (
-                              <li key={email.id} className="text-sm">
-                                <strong>From:</strong> {email.from_email} |{" "}
-                                <strong>Subject:</strong> {email.subject} |{" "}
-                                <span>{email.body}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      <InboxList
+        inboxes={inboxes}
+        emails={emails}
+        status={status}
+        deletingId={deletingId}
+        copiedId={copiedId}
+        isDeleteOpen={isDeleteOpen}
+        deleteId={deleteId}
+        setDeleteId={setDeleteId}
+        setIsDeleteOpen={setIsDeleteOpen}
+        handleCopyInbox={handleCopyInbox}
+        handleDeleteInbox={handleDeleteInbox}
+        handleViewEmails={handleViewEmails}
+        setSendFrom={setSendFrom}
+        setIsSendOpen={setIsSendOpen}
+        setSendTo={setSendTo}
+        setSendSubject={setSendSubject}
+        setSendBody={setSendBody}
+        deleteEmail={deleteEmail} // Pass to InboxList
+      />
+      <SendEmailDrawer
+        isOpen={isSendOpen}
+        setIsOpen={setIsSendOpen}
+        sendFrom={sendFrom}
+        sendTo={sendTo}
+        setSendTo={setSendTo}
+        sendSubject={sendSubject}
+        setSendSubject={setSendSubject}
+        sendBody={sendBody}
+        setSendBody={setSendBody}
+        sendError={sendError}
+        setSendError={setSendError}
+        inboxes={inboxes}
+        handleSendEmail={handleSendEmail}
+      />
     </div>
   );
 
